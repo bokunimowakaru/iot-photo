@@ -28,6 +28,7 @@ int httpGet(char *url,int max_size){
     }
     for(i=0;i<32;i++)if(!isgraph(to[i]))to[i]='\0'; to[32]=0;
     for(i=0;i<64;i++)if(!isgraph(s[i]))s[i]='\0'; s[64]=0;
+    if( max_size <= 0 ) max_size = 32767;
     Serial.print("HTTP host : ");
     Serial.println(to);
     Serial.print("Filename  : ");
@@ -58,6 +59,7 @@ int httpGet(char *url,int max_size){
     client.print(to);                       // 相手先ホスト名
     client.println();                       // ホスト名の指定を終了
     client.println("Connection: close");    // セッションの都度切断を指定
+    client.println(); 
     
     // 以下の処理はデータの受信完了まで終了しないので、その間に届いたデータを
     // 損失してしまう場合があります。
@@ -80,11 +82,13 @@ int httpGet(char *url,int max_size){
                 } else file.write(c);
                 if( size > j ){
                     Serial.print('.');
-                    oled.print('.');
+                //  oled.print('.');
                     j += 512;
                 }
-                if(size >= max_size) break;
+                if(max_size > 0 && size >= max_size) break;
                 continue; 
+            }else{
+                Serial.print((char)c);
             }
             if(headF==1){                   // 前回が行端の時
                 if(c=='\n') headF=2;        // 今回も行端ならヘッダ終了
