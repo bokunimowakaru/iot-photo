@@ -86,7 +86,12 @@ void html(WiFiClient &client, char *lcd, uint32_t ip){
     sprintf(s,"<form method=\"GET\" action=\"http://%s/\">",s_ip);
     client.println(s);
     client.println("<input type=\"submit\" value=\"写真の取得\">");
-    client.println("<input type=\"submit\" name=\"FORMAT\" value=\"初期化\">");
+    client.println("<input type=\"submit\" name=\"FORMAT\" value=\"SPIFFS 初期化\">");
+    client.println("</form>");
+    client.println(s);
+    client.println("<input type=\"submit\" name=\"B\" value=\"0 (鳴音停止)\">");
+    client.println("<input type=\"submit\" name=\"B\" value=\"2 (ピンポン)\">");
+    client.println("<input type=\"submit\" name=\"B\" value=\"10 (5回連続)\">");
     client.println("</form>");
     client.println("<hr>");
     

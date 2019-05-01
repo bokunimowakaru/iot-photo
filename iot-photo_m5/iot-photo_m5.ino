@@ -17,6 +17,8 @@ Example 64: ESP32 Wi-Fi コンシェルジェ フォトフレーム＆カメラ�
 #include <ESPmDNS.h>						// ESP32用マルチキャストDNS
 #define PIN_OLED_CS 	14
 #define PIN_OLED_DC 	27
+#define PIN_BUZZER		25					// GPIO 25:スピーカ
+RTC_DATA_ATTR uint8_t BUZZER_VOL=10;		// スピーカの音量(0～127)
 
 #define PIN_SD_CS		4					// GPIO 4にSDのCSを接続
 /*
@@ -50,6 +52,8 @@ boolean SD_CARD_EN = false; 				// SDカードを使用可否
 unsigned long TIME; 						// タイマー用変数
 
 void setup(void){
+	pinMode(PIN_BUZZER,OUTPUT); 			// ブザーを接続したポートを出力に
+	chimeBellsSetup(PIN_BUZZER,BUZZER_VOL);	// ブザー/LED用するPWM制御部の初期化
 	Serial.begin(115200);
 	Serial.println("init");
 	oled.begin();
@@ -66,7 +70,12 @@ void setup(void){
 	WiFi.begin(SSID,PASS);					// 無線LANアクセスポイントへ接続
 	TIME=millis();
 	while(WiFi.status() != WL_CONNECTED){	// 接続に成功するまで待つ
-		oled.print("."); delay(500);		// 接続進捗を表示
+		oled.print(".");					// 接続進捗を表示
+		ledcWriteNote(0,NOTE_B,7);
+        ledcWrite(0, 10);
+		delay(50);
+		ledcWrite(0, 0);
+		delay(450); 						// 待ち時間処理
 		if(millis()-TIME > TIMEOUT){		// 待ち時間後の処理
 			WiFi.disconnect();				// WiFiアクセスポイントを切断する
 			oled.println("\nWi-Fi AP Mode");// 接続が出来なかったときの表示
@@ -90,6 +99,7 @@ void setup(void){
 }
 
 boolean get_photo_continuously = false;
+int chime=0;								// チャイムOFF
 
 void loop(){								// 繰り返し実行する関数
 	File file;
@@ -101,6 +111,10 @@ void loop(){								// 繰り返し実行する関数
 	int len=0;								// 文字列長を示す整数型変数を定義
 	int headF=0;							// ヘッダフラグ(0:ヘッダ 1:BODY)
 
+	if(chime){								// チャイムの有無
+		chime=chimeBells(PIN_BUZZER,chime); // チャイム音を鳴らす
+		return;
+	}
 	client = server.available();			// 接続されたTCPクライアントを生成
 	if(!client){							// TCPクライアントが無かった場合
 		if(get_photo_continuously){
@@ -121,7 +135,7 @@ void loop(){								// 繰り返し実行する関数
 		for(i=0;i<len;i++) if( !isgraph(s[i]) ) s[i]=' ';	// 特殊文字除去
 		if(len <= 8)return; 				// 8文字以下の場合はデータなし
 		if(s[5]!='_' || s[7]!=',')return;	// 6文字目「_」8文字目「,」を確認
-		oled.println(s); Serial.println(); Serial.println(s); Serial.println();
+		oled.println(s); Serial.println(); Serial.println(s);
 		if(strncmp(s,DEVICE_CAM,5)==0){ 	// カメラからの取得指示のとき
 			char *cp=strchr(&s[8],','); 	// cam_a_1,size, http://192.168...
 			int size = atoi(&s[8]);
@@ -146,8 +160,10 @@ void loop(){								// 繰り返し実行する関数
 			int pir = atoi(&s[8]);			// PIRの値を取得
 			if(pir){
 				get_photo_continuously = true;
+				chime = 2;
 			}else{
 				get_photo_continuously = false;
+				TIME=millis();
 			}
 		}
 		return; 							// loop()の先頭に戻る
@@ -168,6 +184,9 @@ void loop(){								// 繰り返し実行する関数
 					strcpy(ret,"FORMAT SPIFFS"); oled.println(ret);
 					SPIFFS.format();		// ファイル全消去
 					break;
+				}else if(len>8 && strncmp(s,"GET /?B=",8)==0){
+					chime=atoi(&s[8]);		// 変数chimeにデータ値を代入
+					break;					// 解析処理の終了
 				}else if (len>6 && strncmp(s,"GET / ",6)==0){
 					len=0;
 					break;					   // 解析処理の終了
