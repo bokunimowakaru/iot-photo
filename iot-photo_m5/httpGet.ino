@@ -67,7 +67,7 @@ int httpGet(char *url,int max_size){
     time=millis(); j=0;
     while(t<TIMEOUT){
         if(client.available()){             // クライアントからのデータを確認
-            t=0;
+            t = TIMEOUT - 10;
             c=client.read();                // TCPデータの読み取り
             if(headF==2){
                 // 複数バイトread命令を使用する

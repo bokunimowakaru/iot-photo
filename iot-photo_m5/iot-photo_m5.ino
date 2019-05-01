@@ -35,7 +35,7 @@ RTC_DATA_ATTR uint8_t BUZZER_VOL=10;		// スピーカの音量(0～127)
 #define PORT 1024								// センサ機器 UDP受信ポート番号
 RTC_DATA_ATTR char	DEVICE_CAM[9]="cam_a_5,";	// カメラ(実習4/example15)名前5文字
 RTC_DATA_ATTR char	DEVICE_PIR[9]="pir_s_5,";	// カメラを起動する人感センサ名
-RTC_DATA_ATTR char	DEVICE_URL[33]="";			// カメラのHTTPアクセス先
+RTC_DATA_ATTR char	DEVICE_URL[33]="192.168.0.2/cam.jpg";	// カメラのアクセス先
 
 #include "Adafruit_GFX.h"
 #include "Adafruit_ILI9341.h"
@@ -72,14 +72,19 @@ void setup(void){
 	while(WiFi.status() != WL_CONNECTED){	// 接続に成功するまで待つ
 		oled.print(".");					// 接続進捗を表示
 		ledcWriteNote(0,NOTE_B,7);
-        ledcWrite(0, 10);
+        ledcWrite(0, BUZZER_VOL);
 		delay(50);
 		ledcWrite(0, 0);
 		delay(450); 						// 待ち時間処理
 		if(millis()-TIME > TIMEOUT){		// 待ち時間後の処理
+			ledcWriteNote(0,NOTE_G,7);
+		    ledcWrite(0, BUZZER_VOL);
 			WiFi.disconnect();				// WiFiアクセスポイントを切断する
 			oled.println("\nWi-Fi AP Mode");// 接続が出来なかったときの表示
-			WiFi.mode(WIFI_AP); delay(100); // 無線LANを【AP】モードに設定
+			WiFi.mode(WIFI_AP);				// 無線LANを【AP】モードに設定
+			delay(100);                     // 設定時間
+			delay(200);                     // 鳴音時間
+			ledcWrite(0, 0);
 			WiFi.softAP(SSID_AP,PASS_AP);	// ソフトウェアAPの起動
 			WiFi.softAPConfig(
 				IPAddress(192,168,0,1),		// AP側の固定IPアドレスの設定
@@ -118,10 +123,14 @@ void loop(){								// 繰り返し実行する関数
 	client = server.available();			// 接続されたTCPクライアントを生成
 	if(!client){							// TCPクライアントが無かった場合
 		if(get_photo_continuously){
+			unsigned long CAM_TIME = millis();
 			httpGet(DEVICE_URL,0);		// 0=サイズ不明
+			Serial.println("time =" + String(millis() - CAM_TIME) + " ms");
+			CAM_TIME = millis();
 			if(SD_CARD_EN) file = SD.open("/cam.jpg","r");	
 			else file = SPIFFS.open("/cam.jpg","r"); 
 			jpegDrawSlide(file);
+			Serial.println("time =" + String(millis() - CAM_TIME) + " ms");
 			file.close();
 		}else if(millis()-TIME > TIMEOUT){
 			if(SD_CARD_EN) jpegDrawSlideShowNext(SD);
@@ -147,6 +156,10 @@ void loop(){								// 繰り返し実行する関数
 					jpegDrawSlide(file);
 					file.close();
 				}else if(strncmp(s,DEVICE_CAM,8)==0){	// デバイス名の一致で登録
+					ledcWriteNote(0,NOTE_B,7);
+			        ledcWrite(0, BUZZER_VOL);
+					delay(50);
+					ledcWrite(0, 0);
 					strncpy(DEVICE_URL,cp+9,32);
 					DEVICE_URL[32]='\0';
 					String Str = "Wi-Fi Camera Registered";
