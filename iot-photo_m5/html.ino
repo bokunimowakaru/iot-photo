@@ -76,7 +76,7 @@ void html(WiFiClient &client, char *lcd, uint32_t ip){
     client.println("/\">");
     client.println("</head>");
     client.println("<body>");
-    client.print("<h3>有機EL Photo Frame STATUS</h3><p>");
+    client.print("<h3>Photo Frame STATUS</h3><p>");
     client.print(lcd);    
     client.println("</p>");
     client.println("<center><img src=\"cam.jpg\" height=240 width=320></center>");
@@ -90,7 +90,7 @@ void html(WiFiClient &client, char *lcd, uint32_t ip){
     client.println("</form>");
     client.println("<hr>");
     
-    client.println("<h3>ファイルシステム 写真を有機ELへ表示</h3>");
+    client.println("<h3>ファイルシステム 写真をLCDに表示</h3>");
     client.println("<center><table border>");
     /*
     while (dir.next()) {

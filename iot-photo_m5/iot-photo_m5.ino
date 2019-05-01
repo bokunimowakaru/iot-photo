@@ -89,6 +89,8 @@ void setup(void){
 	TIME=millis();
 }
 
+boolean get_photo_continuously = false;
+
 void loop(){								// 繰り返し実行する関数
 	File file;
 	WiFiClient client;						// Wi-Fiクライアントの定義
@@ -101,7 +103,13 @@ void loop(){								// 繰り返し実行する関数
 
 	client = server.available();			// 接続されたTCPクライアントを生成
 	if(!client){							// TCPクライアントが無かった場合
-		if(millis()-TIME > TIMEOUT){
+		if(get_photo_continuously){
+			httpGet(DEVICE_URL,0);		// 0=サイズ不明
+			if(SD_CARD_EN) file = SD.open("/cam.jpg","r");	
+			else file = SPIFFS.open("/cam.jpg","r"); 
+			jpegDrawSlide(file);
+			file.close();
+		}else if(millis()-TIME > TIMEOUT){
 			if(SD_CARD_EN) jpegDrawSlideShowNext(SD);
 			else jpegDrawSlideShowNext(SPIFFS);
 			TIME=millis();
@@ -137,11 +145,9 @@ void loop(){								// 繰り返し実行する関数
 		}else if(strncmp(s,DEVICE_PIR,5)==0 && DEVICE_URL[0] ){ // PIR受信かつURL登録あり
 			int pir = atoi(&s[8]);			// PIRの値を取得
 			if(pir){
-				httpGet(DEVICE_URL,0);		// 0=サイズ不明
-				if(SD_CARD_EN) file = SD.open("/cam.jpg","r");	
-				else file = SPIFFS.open("/cam.jpg","r"); 
-				jpegDrawSlide(file);
-				file.close();
+				get_photo_continuously = true;
+			}else{
+				get_photo_continuously = false;
 			}
 		}
 		return; 							// loop()の先頭に戻る
