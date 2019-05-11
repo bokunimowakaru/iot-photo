@@ -39,7 +39,7 @@ int httpGet(char *url,int max_size){
     Serial.println("HTTP://" + String(to) + String(s));
 //  Serial.print("Max Size  : ");
 //  Serial.println(max_size);
-    Serial.println("Recieving... ");
+    Serial.print("Recieving...");
     i=0;
     while( !client.connect(to,80) ){        // 外部サイトへ接続を実行する
         i++; if( i >= 30){                  // 失敗時のリトライ処理 30
@@ -70,17 +70,15 @@ int httpGet(char *url,int max_size){
     client.print(to);                       // 相手先ホスト名
     client.println();                       // ホスト名の指定を終了
     client.println("Connection: close");    // セッションの都度切断を指定
-    client.println(); 
+    client.println();
+    delay(1);
     
-    // 以下の処理はデータの受信完了まで終了しないので、その間に届いたデータを
-    // 損失してしまう場合があります。
-    // Wi-Fiカメラの初期版では、送信完了まで20秒くらいかかります。
     time=millis();
     i=0;j=0;
     t=0;
-    while(t<3000){
+    while(1){
         if(client.available()){             // クライアントからのデータを確認
-            t = 1000;                       // 一度、接続したときのタイムアウトは1秒
+            t = 3000;                       // 一度、接続したときのタイムアウトは3秒
             c=client.read();                // TCPデータの読み取り
             
             if(headF==0){                   // ヘッダの処理
@@ -90,25 +88,24 @@ int httpGet(char *url,int max_size){
                 if(i>255) i=255;
                 if(c=='\n'){                // 行端ならフラグを変更
                     headF=1;
+                    Serial.print(s);
                     if(strncmp(s,"Content-Length:",15)==0){
                         max_size = atoi(&s[15]);
                     //  Serial.print("("+String(max_size)+")");
                     }
                     i=0;
                 }
-                Serial.print((char)c);
                 continue;
             }else if(headF==1){             // 前回が行端の時(連続改行＝ヘッダ終了)
                 if(c=='\n'){                // 今回も行端ならヘッダ終了
                     headF=2;
-                    Serial.println("[END]");
+                    Serial.print("loading");
                 }else{
                     if(c!='\r'){
                         headF=0;
                         s[0]=c;
                         i=1;
                         s[1]='\0';
-                        Serial.print((char)c);
                     }
                 }
                 continue;
@@ -128,6 +125,7 @@ int httpGet(char *url,int max_size){
                         }else{
                             memcpy(&camera_buf[camera_buf_len], (uint8_t *)s, CAMERA_BUF_SIZE - camera_buf_len);
                             camera_buf_len = CAMERA_BUF_SIZE;
+                            Serial.println("http BUFFER FULL");
                             break;
                         }
                     }
@@ -142,14 +140,24 @@ int httpGet(char *url,int max_size){
                 if( size > j ){
                     Serial.print('.');
                 //  oled.print('.');
-                    j += 512;
+                    j += 1024;
                 }
-                if(max_size > 0 && size >= max_size) break;
+                if(max_size > 0 && size >= max_size){
+                    Serial.println("http END");
+                    break;
+                }
                 continue; 
             }
         }
-        if (!client.connected()) break;
+        if (!client.connected()){
+            Serial.println("http DISCONNECTED");
+            break;
+        }
         t++;
+        if(t>7000){                                 // 7秒
+            Serial.println("http TIMEOUT");
+            break;
+        }
         delay(1);
     }
     if( httpGet_file ){
@@ -159,7 +167,7 @@ int httpGet(char *url,int max_size){
     client.stop();                          // クライアントの切断
     Serial.println();
     Serial.print(size);                     // 保存したファイルサイズを表示
-    Serial.print("Bytes, ");
+    Serial.print(" Bytes, ");
     Serial.print(millis()-time);
     Serial.println("ms, Done");
     return size;

@@ -150,7 +150,6 @@ void loop(){								// 繰り返し実行する関数
 					jpegDraw(file);
 				#endif
 			//	jpegDrawShowTitle(DEVICE_URL);	// 背景描画つき
-				oled.setTextColor(0xFFFF);
 				oled.setCursor(1, 1);
 				oled.println(DEVICE_URL);
 				#ifdef CAMERA_BUF_EN
