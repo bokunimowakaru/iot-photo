@@ -75,10 +75,10 @@ void jpegDraw(File file,uint8_t *camera_buf,int camera_buf_len){
     
     Serial.print("Loading image '");
     Serial.print(file.name());
-    Serial.println('\'');
-    Serial.print("File size: ");
-    if(camera_buf_len ==0) Serial.println(file.size());
-    else Serial.println(camera_buf_len);
+    Serial.print("\', ");
+    if(camera_buf_len ==0) Serial.print(file.size());
+    else Serial.print(camera_buf_len);
+    Serial.println(" bytes");
     
     JpegDec.begin();
     JpegDec.setModeBuf(camera_buf,camera_buf_len);

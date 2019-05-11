@@ -43,7 +43,7 @@ RTC_DATA_ATTR char	DEVICE_URL[33]="192.168.0.2/cam.jpg";	// カメラのアク�
 #ifdef CAMERA_BUF_EN
 	#define CAMERA_BUF_SIZE 32767				// カメラ用バッファ・サイズ
 #else
-	#define CAMERA_BUF_SIZE 1
+	#define CAMERA_BUF_SIZE 2
 #endif
 static uint8_t camera_buf[CAMERA_BUF_SIZE];
 static int camera_buf_len=0;
@@ -140,9 +140,8 @@ void loop(){								// 繰り返し実行する関数
 			#else
 				len = httpGet(DEVICE_URL,0);
 			#endif
+			unsigned long CAM_TIME_HTTP = millis() - CAM_TIME;
 			if(len>0) {
-				Serial.println("time =" + String(millis() - CAM_TIME) + " ms");
-				CAM_TIME = millis();
 				if(SD_CARD_EN) file = SD.open("/cam.jpg","r");	
 				else file = SPIFFS.open("/cam.jpg","r");
 				#ifdef CAMERA_BUF_EN
@@ -154,10 +153,15 @@ void loop(){								// 繰り返し実行する関数
 				oled.setTextColor(0xFFFF);
 				oled.setCursor(1, 1);
 				oled.println(DEVICE_URL);
+				#ifdef CAMERA_BUF_EN
+					file.close();
+				#endif
+				unsigned long CAM_TIME_JPEG = millis() - CAM_TIME - CAM_TIME_HTTP;
 				int ms = (int)(millis() - CAM_TIME);
-				float fps = 1000. / (float)ms;
-				Serial.println("time =" + String(ms) + " ms (" + String(fps,3) + " f/s)\n");
-				file.close();
+				float fps = 1000. / ( (float)CAM_TIME_HTTP + (float)CAM_TIME_JPEG );
+				Serial.println("\nHTTP time :" + String(CAM_TIME_HTTP) + " ms");
+				Serial.println("JPEG time :" + String(CAM_TIME_JPEG) + " ms");
+				Serial.println("Total time:" + String(CAM_TIME_HTTP+CAM_TIME_JPEG) + " ms (" + String(fps,3) + " f/s)\n");
 			}
 		}else if(millis()-TIME > TIMEOUT){
 			if(SD_CARD_EN) jpegDrawSlideShowNext(SD);

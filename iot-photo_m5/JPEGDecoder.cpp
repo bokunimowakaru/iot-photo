@@ -18,7 +18,7 @@
 #include "JPEGDecoder.h"
 #include "picojpeg.h"
 
-#define DEBUG_JPEG
+// #define DEBUG_JPEG
 
 JPEGDecoder JpegDec;
 
@@ -104,12 +104,16 @@ int JPEGDecoder::begin(){
     is_available = 0;
     reduce = 0;
     
+    #ifdef DEBUG_JPEG
     Serial.print("SD card...");
+    #endif
     if (!SD.begin()) {
-        Serial.println("failed!");
+        Serial.println("ERROR: sd open failed!");
         return -1;
     }
+    #ifdef DEBUG_JPEG
     Serial.println("OK!");
+    #endif
     return 0;
 }
 
@@ -127,9 +131,7 @@ int JPEGDecoder::decode(File pInFile, unsigned char pReduce){
     g_pInFile = pInFile;
     /*
     if (!g_pInFile){
-        #ifdef DEBUG_JPEG
-            Serial.println("failed to open jpeg file");
-        #endif
+        Serial.println("failed to open jpeg file");
         return -1;
     }
     */
@@ -147,7 +149,6 @@ int JPEGDecoder::decode(File pInFile, unsigned char pReduce){
 
     if (status)
     {
-        #ifdef DEBUG_JPEG
         Serial.print("ERROR : pjpeg_decode_init() : ");
         /*
         switch(status & 63){
@@ -197,7 +198,6 @@ int JPEGDecoder::decode(File pInFile, unsigned char pReduce){
         Serial.print(status);
         Serial.print(' ');
         Serial.println(status,BIN);
-        #endif
         
         if(g_pInFile) g_pInFile.close();
         return -1;
@@ -232,9 +232,7 @@ int JPEGDecoder::decode(File pInFile, unsigned char pReduce){
     if (!pImage)
     {
         if(g_pInFile) g_pInFile.close();
-        #ifdef DEBUG_JPEG
-        Serial.println("Memory Allocation Failure");
-        #endif
+        Serial.println("ERROR: Memory Allocation Failure");
         
         return -1;
     }
@@ -270,10 +268,8 @@ int JPEGDecoder::decode_mcu(void){
 
         if (status != PJPG_NO_MORE_BLOCKS)
         {
-            #ifdef DEBUG_JPEG
-            Serial.print("pjpeg_decode_mcu() failed with status ");
+            Serial.print("ERROR: pjpeg_decode_mcu() failed with status ");
             Serial.println(status);
-            #endif
             if(status){
                 delete pImage;
                 return -1;

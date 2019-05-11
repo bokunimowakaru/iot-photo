@@ -35,20 +35,21 @@ int httpGet(char *url,int max_size){
     for(i=0;i<32;i++)if(!isgraph(to[i]))to[i]='\0'; to[32]=0;
     for(i=0;i<64;i++)if(!isgraph(s[i]))s[i]='\0'; s[64]=0;
     if( max_size <= 0 ) max_size = 32767;
-    Serial.print("HTTP host : ");
-    Serial.println(to);
-    Serial.print("Filename  : ");
-    Serial.println(s);
-    Serial.print("Max Size  : ");
-    Serial.println(max_size);
-    Serial.println("Recieving contents");
-    i=0; while( !client.connect(to,80) ){   // 外部サイトへ接続を実行する
-        i++; if(i>=3){                      // 失敗時のリトライ処理
+    Serial.println("HTTP://" + String(to) + String(s));
+//  Serial.print("Max Size  : ");
+//  Serial.println(max_size);
+    Serial.println("Recieving... ");
+    i=0;
+    while( !client.connect(to,80) ){        // 外部サイトへ接続を実行する
+        i++; if( i >= TIMEOUT / 1000){      // 失敗時のリトライ処理 1/10
             Serial.println("ERROR: Failed to connect");
+            Serial.println("HTTP Host: " + String(to));
+            Serial.println("HTTP file: " + String(s));
+            
             return 0;
         }
-        Serial.println("WARN: Retrying");
-        delay(10);                          // 10msのリトライ待ち時間
+        Serial.println("WARN: Retrying... " + String(i) );
+        delay(100);                         // 100msのリトライ待ち時間
     }
     if( httpGet_file ){
         if( SD_CARD_EN ) file = SD.open(s,"w"); // 保存のためにファイルを開く
