@@ -52,6 +52,10 @@ private:
     uint8 status;
     uint8 reduce;
     
+    uint8_t *jd_camera_buf;
+    int jd_camera_buf_len;
+    int jd_camera_buf_p;
+    
     static uint8 pjpeg_callback(unsigned char* pBuf, unsigned char buf_size, unsigned char *pBytes_actually_read, void *pCallback_data);
     uint8 pjpeg_need_bytes_callback(unsigned char* pBuf, unsigned char buf_size, unsigned char *pBytes_actually_read, void *pCallback_data);
     int decode_mcu(void);
@@ -75,6 +79,7 @@ public:
     JPEGDecoder();
     ~JPEGDecoder();
     int begin();
+    void setModeBuf(uint8_t *camera_buf,int camera_buf_len);
 //  int decode(char* pFilename, unsigned char pReduce);
 	int decode(File pInFile, unsigned char pReduce);
     int available(void);

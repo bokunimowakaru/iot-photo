@@ -8,6 +8,12 @@ HTMLコンテンツ取得
 
 #include <WiFi.h>                           // ESP32用WiFiライブラリ
 
+// #define CAMERA_BUF_SIZE
+// extern static uint8_t camera_buf[];
+// extern static int camera_buf_len=0;
+
+static boolean httpGet_file = true;
+
 int httpGet(char *url,int max_size){
     File file;
     WiFiClient client;                      // Wi-Fiクライアントの定義
@@ -44,13 +50,15 @@ int httpGet(char *url,int max_size){
         Serial.println("WARN: Retrying");
         delay(10);                          // 10msのリトライ待ち時間
     }
-    if( SD_CARD_EN ) file = SD.open(s,"w"); // 保存のためにファイルを開く
-    else file = SPIFFS.open(s,"w");         // 保存のためにファイルを開く
-    if(file==0){
-        Serial.println("ERROR: FALIED TO OPEN. Please format SPIFFS or SD.");
-        client.flush();                     // ESP32用 ERR_CONNECTION_RESET対策
-        client.stop();                      // クライアントの切断
-        return 0;                           // ファイルを開けれなければ戻る
+    if( httpGet_file ){
+        if( SD_CARD_EN ) file = SD.open(s,"w"); // 保存のためにファイルを開く
+        else file = SPIFFS.open(s,"w");         // 保存のためにファイルを開く
+        if(file==0){
+            Serial.println("ERROR: FALIED TO OPEN. Please format SPIFFS or SD.");
+            client.flush();                     // ESP32用 ERR_CONNECTION_RESET対策
+            client.stop();                      // クライアントの切断
+            return 0;                           // ファイルを開けれなければ戻る
+        }
     }
     client.print("GET ");                   // HTTP GETコマンドを送信
     client.print(s);                        // 相手先ディレクトリを指定
@@ -64,12 +72,44 @@ int httpGet(char *url,int max_size){
     // 以下の処理はデータの受信完了まで終了しないので、その間に届いたデータを
     // 損失してしまう場合があります。
     // Wi-Fiカメラの初期版では、送信完了まで20秒くらいかかります。
-    time=millis(); j=0;
+    time=millis();
+    i=0;j=0;
+    t=0;
     while(t<TIMEOUT){
         if(client.available()){             // クライアントからのデータを確認
-            t = TIMEOUT - 10;
+            t = 1000;                       // 一度、接続したときのタイムアウトは1秒
             c=client.read();                // TCPデータの読み取り
-            if(headF==2){
+            
+            if(headF==0){                   // ヘッダの処理
+                s[i]=c;
+                i++;
+                s[i]='\0';
+                if(i>255) i=255;
+                if(c=='\n'){                // 行端ならフラグを変更
+                    headF=1;
+                    if(strncmp(s,"Content-Length:",15)==0){
+                        max_size = atoi(&s[15]);
+                    //  Serial.print("("+String(max_size)+")");
+                    }
+                    i=0;
+                }
+                Serial.print((char)c);
+                continue;
+            }else if(headF==1){             // 前回が行端の時(連続改行＝ヘッダ終了)
+                if(c=='\n'){                // 今回も行端ならヘッダ終了
+                    headF=2;
+                    Serial.println("[END]");
+                }else{
+                    if(c!='\r'){
+                        headF=0;
+                        s[0]=c;
+                        i=1;
+                        s[1]='\0';
+                        Serial.print((char)c);
+                    }
+                }
+                continue;
+            }else if(headF==2){
                 // 複数バイトread命令を使用する
                 // int WiFiClient::read(uint8_t *buf, size_t size)
                 s[0]=c; size++;             // 既に取得した1バイト目を代入
@@ -77,9 +117,25 @@ int httpGet(char *url,int max_size){
                 // 戻り値はrecvが代入されている
                 // int res = recv(fd(), buf, size, MSG_DONTWAIT);
                 if(i>0){                            // 受信データがある時
-                    file.write((const uint8_t *)s, i+1);
+                    if( httpGet_file ) file.write((const uint8_t *)s, i+1);
+                    else{
+                        if(camera_buf_len + i + 1 <= CAMERA_BUF_SIZE){
+                            memcpy(&camera_buf[camera_buf_len], (const uint8_t *)s, i+1);
+                            camera_buf_len += i+1;
+                        }else{
+                            memcpy(&camera_buf[camera_buf_len], (uint8_t *)s, CAMERA_BUF_SIZE - camera_buf_len);
+                            camera_buf_len = CAMERA_BUF_SIZE;
+                            break;
+                        }
+                    }
                     size += i;
-                } else file.write(c);
+                } else {
+                    if( httpGet_file ) file.write(c);
+                    else{
+                        camera_buf[camera_buf_len]=c;
+                        camera_buf_len++;
+                    }
+                }
                 if( size > j ){
                     Serial.print('.');
                 //  oled.print('.');
@@ -87,22 +143,16 @@ int httpGet(char *url,int max_size){
                 }
                 if(max_size > 0 && size >= max_size) break;
                 continue; 
-            }else{
-                Serial.print((char)c);
             }
-            if(headF==1){                   // 前回が行端の時
-                if(c=='\n') headF=2;        // 今回も行端ならヘッダ終了
-                else if(c!='\r') headF=0;
-                continue;
-            }
-            if(c=='\n') headF=1;            // 行端ならフラグを変更
-            continue;
         }
+        if (!client.connected()) break;
         t++;
         delay(1);
     }
-    if(i) file.write((const uint8_t *)s, i); 
-    file.close();                           // ファイルを閉じる
+    if( httpGet_file ){
+        if(i) file.write((const uint8_t *)s, i); 
+        file.close();                           // ファイルを閉じる
+    }
     client.stop();                          // クライアントの切断
     Serial.println();
     Serial.print(size);                     // 保存したファイルサイズを表示
@@ -110,4 +160,13 @@ int httpGet(char *url,int max_size){
     Serial.print(millis()-time);
     Serial.println("ms, Done");
     return size;
+}
+
+int httpGetBuf(char *url,int max_size){
+    int ret;
+    camera_buf_len=0;
+    httpGet_file=false;
+    ret=httpGet(url,max_size);
+    httpGet_file=true;
+    return ret;
 }

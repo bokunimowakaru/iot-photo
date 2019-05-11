@@ -2,7 +2,7 @@
 本ソースリストは2017/11/2に下記からダウンロードしたものを、国野亘が改変したものです。
 改変部以外は原作者の権利が継続します。
 
-	https://github.com/MakotoKurauchi/JPEGDecoder
+    https://github.com/MakotoKurauchi/JPEGDecoder
 
 2017/11/2 国野 亘
 */
@@ -51,15 +51,22 @@ unsigned char JPEGDecoder::pjpeg_need_bytes_callback(unsigned char* pBuf, unsign
 
 //  pCallback_data;
     
-    n = min(g_nInFileSize - g_nInFileOfs, buf_size);
 
-    while( t<3 ){                       // エラー3回以内で繰り返し処理実行
-        if(!g_pInFile.available()){          // ファイルの有無を確認
-            t++; delay(100);            // ファイル無し時に100msの待ち時間
-            continue;                   // whileループに戻ってリトライ
-        }
-        i += g_pInFile.read(pBuf,n);          // ファイル読み取り
-        if(i>=n) break;
+    if(g_pInFile){
+        n = min(g_nInFileSize - g_nInFileOfs, buf_size);
+        while( t<3 ){                       // エラー3回以内で繰り返し処理実行
+            if(!g_pInFile.available()){          // ファイルの有無を確認
+                t++; delay(100);            // ファイル無し時に100msの待ち時間
+                continue;                   // whileループに戻ってリトライ
+            }
+            i += g_pInFile.read(pBuf,n);          // ファイル読み取り
+            if(i>=n) break;
+        }       
+    }else{
+        n = min(jd_camera_buf_len - jd_camera_buf_p, buf_size);
+        memcpy(pBuf, &jd_camera_buf[jd_camera_buf_p], n);
+        jd_camera_buf_p += n;
+        i += n;
     }
 /*
     #ifdef DEBUG_JPEG
@@ -106,21 +113,30 @@ int JPEGDecoder::begin(){
     return 0;
 }
 
+void JPEGDecoder::setModeBuf(uint8_t *camera_buf,int camera_buf_len){
+    jd_camera_buf = camera_buf;
+    jd_camera_buf_len = camera_buf_len;
+    jd_camera_buf_p = 0;
+}
+
 int JPEGDecoder::decode(File pInFile, unsigned char pReduce){
     
     if(pReduce) reduce = pReduce;
     
 //  g_pInFile = SD.open(pFilename, FILE_READ);
     g_pInFile = pInFile;
+    /*
     if (!g_pInFile){
         #ifdef DEBUG_JPEG
             Serial.println("failed to open jpeg file");
         #endif
         return -1;
     }
+    */
     g_nInFileOfs = 0;
 
-    g_nInFileSize = g_pInFile.size();
+    if(g_pInFile) g_nInFileSize = g_pInFile.size();
+    else g_nInFileSize = jd_camera_buf_len;
     #ifdef DEBUG_JPEG
         Serial.print("file size = ");
         Serial.println(g_nInFileSize);
@@ -183,7 +199,7 @@ int JPEGDecoder::decode(File pInFile, unsigned char pReduce){
         Serial.println(status,BIN);
         #endif
         
-        g_pInFile.close();
+        if(g_pInFile) g_pInFile.close();
         return -1;
     }
     #ifdef DEBUG_JPEG
@@ -215,7 +231,7 @@ int JPEGDecoder::decode(File pInFile, unsigned char pReduce){
     pImage = new uint8[image_info.m_MCUWidth * image_info.m_MCUHeight * image_info.m_comps];
     if (!pImage)
     {
-        g_pInFile.close();
+        if(g_pInFile) g_pInFile.close();
         #ifdef DEBUG_JPEG
         Serial.println("Memory Allocation Failure");
         #endif
@@ -223,7 +239,7 @@ int JPEGDecoder::decode(File pInFile, unsigned char pReduce){
         return -1;
     }
     // memset(pImage , 0 , sizeof(pImage));
-	memset(pImage , 0 , image_info.m_MCUWidth * image_info.m_MCUHeight * image_info.m_comps);
+    memset(pImage , 0 , image_info.m_MCUWidth * image_info.m_MCUHeight * image_info.m_comps);
 
     row_blocks_per_mcu = image_info.m_MCUWidth >> 3;
     col_blocks_per_mcu = image_info.m_MCUHeight >> 3;
@@ -250,7 +266,7 @@ int JPEGDecoder::decode_mcu(void){
     {
         is_available = 0 ;
 
-        g_pInFile.close();
+        if(g_pInFile) g_pInFile.close();
 
         if (status != PJPG_NO_MORE_BLOCKS)
         {
@@ -278,7 +294,7 @@ int JPEGDecoder::read(void)
     if (mcu_y >= image_info.m_MCUSPerCol)
     {
         delete pImage;
-        g_pInFile.close();
+        if(g_pInFile) g_pInFile.close();
         return 0;
     }
 

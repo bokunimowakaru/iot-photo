@@ -1,11 +1,13 @@
 /*******************************************************************************
-Example 64: ESP32 Wi-Fi コンシェルジェ フォトフレーム＆カメラ画像表示端末
- for M5 Stack
+ESP32 Wi-Fi コンシェルジェ フォトフレーム＆カメラ画像表示端末 for M5 Stack
 
-・ワイヤレスカメラ（example15またはexample47）が撮影した画像を表示します
+・カメラ TTGO T-Camera が撮影した画像を表示します
 ・SDカード内の画像ファイル(JPEGとBMP)を表示するフォトフレーム機能も搭載
 
-									  Copyright (c) 2016-2019 Wataru KUNINO
+詳細情報：
+https://github.com/bokunimowakaru/iot-photo
+
+										  Copyright (c) 2016-2019 Wataru KUNINO
 *******************************************************************************/
 /*
 	・本機のアクセスポイントモード動作時はブロードキャストの中継が出来ません
@@ -18,7 +20,7 @@ Example 64: ESP32 Wi-Fi コンシェルジェ フォトフレーム＆カメラ�
 #define PIN_OLED_CS 	14
 #define PIN_OLED_DC 	27
 #define PIN_BUZZER		25					// GPIO 25:スピーカ
-RTC_DATA_ATTR uint8_t BUZZER_VOL=10;		// スピーカの音量(0～127)
+RTC_DATA_ATTR uint8_t BUZZER_VOL=10; 		// スピーカの音量(0～127)
 
 #define PIN_SD_CS		4					// GPIO 4にSDのCSを接続
 /*
@@ -37,6 +39,15 @@ RTC_DATA_ATTR char	DEVICE_CAM[9]="cam_a_5,";	// カメラ(実習4/example15)名�
 RTC_DATA_ATTR char	DEVICE_PIR[9]="pir_s_5,";	// カメラを起動する人感センサ名
 RTC_DATA_ATTR char	DEVICE_URL[33]="192.168.0.2/cam.jpg";	// カメラのアクセス先
 
+#define CAMERA_BUF_EN							// カメラ用バッファを使用する
+#ifdef CAMERA_BUF_EN
+	#define CAMERA_BUF_SIZE 32767				// カメラ用バッファ・サイズ
+#else
+	#define CAMERA_BUF_SIZE 1
+#endif
+static uint8_t camera_buf[CAMERA_BUF_SIZE];
+static int camera_buf_len=0;
+
 #include "Adafruit_GFX.h"
 #include "Adafruit_ILI9341.h"
 #include <SPI.h>
@@ -53,7 +64,7 @@ unsigned long TIME; 						// タイマー用変数
 
 void setup(void){
 	pinMode(PIN_BUZZER,OUTPUT); 			// ブザーを接続したポートを出力に
-	chimeBellsSetup(PIN_BUZZER,BUZZER_VOL);	// ブザー/LED用するPWM制御部の初期化
+	chimeBellsSetup(PIN_BUZZER,BUZZER_VOL); // ブザー/LED用するPWM制御部の初期化
 	Serial.begin(115200);
 	Serial.println("init");
 	oled.begin();
@@ -72,23 +83,23 @@ void setup(void){
 	while(WiFi.status() != WL_CONNECTED){	// 接続に成功するまで待つ
 		oled.print(".");					// 接続進捗を表示
 		ledcWriteNote(0,NOTE_B,7);
-        ledcWrite(0, BUZZER_VOL);
+		ledcWrite(0, BUZZER_VOL);
 		delay(50);
 		ledcWrite(0, 0);
 		delay(450); 						// 待ち時間処理
 		if(millis()-TIME > TIMEOUT){		// 待ち時間後の処理
 			ledcWriteNote(0,NOTE_G,7);
-		    ledcWrite(0, BUZZER_VOL);
+			ledcWrite(0, BUZZER_VOL);
 			WiFi.disconnect();				// WiFiアクセスポイントを切断する
 			oled.println("\nWi-Fi AP Mode");// 接続が出来なかったときの表示
-			WiFi.mode(WIFI_AP);				// 無線LANを【AP】モードに設定
-			delay(100);                     // 設定時間
-			delay(200);                     // 鳴音時間
+			WiFi.mode(WIFI_AP); 			// 無線LANを【AP】モードに設定
+			delay(100); 					// 設定時間
+			delay(200); 					// 鳴音時間
 			ledcWrite(0, 0);
 			WiFi.softAP(SSID_AP,PASS_AP);	// ソフトウェアAPの起動
 			WiFi.softAPConfig(
-				IPAddress(192,168,0,1),		// AP側の固定IPアドレスの設定
-				IPAddress(192,168,0,1),		// 本機のゲートウェイアドレスの設定
+				IPAddress(192,168,0,1), 	// AP側の固定IPアドレスの設定
+				IPAddress(192,168,0,1), 	// 本機のゲートウェイアドレスの設定
 				IPAddress(255,255,255,0)	// ネットマスクの設定
 			); oled.println(WiFi.softAPIP()); break;
 		}
@@ -124,14 +135,30 @@ void loop(){								// 繰り返し実行する関数
 	if(!client){							// TCPクライアントが無かった場合
 		if(get_photo_continuously){
 			unsigned long CAM_TIME = millis();
-			httpGet(DEVICE_URL,0);		// 0=サイズ不明
-			Serial.println("time =" + String(millis() - CAM_TIME) + " ms");
-			CAM_TIME = millis();
-			if(SD_CARD_EN) file = SD.open("/cam.jpg","r");	
-			else file = SPIFFS.open("/cam.jpg","r"); 
-			jpegDrawSlide(file);
-			Serial.println("time =" + String(millis() - CAM_TIME) + " ms");
-			file.close();
+			#ifdef CAMERA_BUF_EN
+				len = httpGetBuf(DEVICE_URL,0); // 0=サイズ不明
+			#else
+				len = httpGet(DEVICE_URL,0);
+			#endif
+			if(len>0) {
+				Serial.println("time =" + String(millis() - CAM_TIME) + " ms");
+				CAM_TIME = millis();
+				if(SD_CARD_EN) file = SD.open("/cam.jpg","r");	
+				else file = SPIFFS.open("/cam.jpg","r");
+				#ifdef CAMERA_BUF_EN
+					jpegDrawBuf(camera_buf,camera_buf_len);
+				#else
+					jpegDraw(file);
+				#endif
+			//	jpegDrawShowTitle(DEVICE_URL);	// 背景描画つき
+				oled.setTextColor(0xFFFF);
+				oled.setCursor(1, 1);
+				oled.println(DEVICE_URL);
+				int ms = (int)(millis() - CAM_TIME);
+				float fps = 1000. / (float)ms;
+				Serial.println("time =" + String(ms) + " ms (" + String(fps,3) + " f/s)\n");
+				file.close();
+			}
 		}else if(millis()-TIME > TIMEOUT){
 			if(SD_CARD_EN) jpegDrawSlideShowNext(SD);
 			else jpegDrawSlideShowNext(SPIFFS);
@@ -157,7 +184,7 @@ void loop(){								// 繰り返し実行する関数
 					file.close();
 				}else if(strncmp(s,DEVICE_CAM,8)==0){	// デバイス名の一致で登録
 					ledcWriteNote(0,NOTE_B,7);
-			        ledcWrite(0, BUZZER_VOL);
+					ledcWrite(0, BUZZER_VOL);
 					delay(50);
 					ledcWrite(0, 0);
 					strncpy(DEVICE_URL,cp+9,32);

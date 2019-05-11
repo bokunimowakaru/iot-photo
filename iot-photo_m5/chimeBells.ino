@@ -30,9 +30,9 @@ void chimeBellsSetup(int PIN){
 }
 
 void chimeBellsSetup(int PIN,int vol){
-	chimeBellsSetup(PIN);
-	if( vol>127) vol=127;
-	LEDC_BASE_DUTY = (uint8_t)vol;
+    chimeBellsSetup(PIN);
+    if( vol>127) vol=127;
+    LEDC_BASE_DUTY = (uint8_t)vol;
 }
 
 
@@ -41,20 +41,33 @@ int chimeBells(int output, int count) {
     if(count==0)return 0;
     if(!(count%2)){
     //  tone(output,NOTE_CS6,800);
-        ledcWriteNote(0,NOTE_Cs,7);		// uint8_t chan, note_t note, uint8_t octave
+        ledcWriteNote(0,NOTE_Cs,7);     // uint8_t chan, note_t note, uint8_t octave
+        for(t=10;t>=0;t--){
+            ledcWrite(0, LEDC_BASE_DUTY * t / 10);
+            delay(LEDC_BASE_LEN);
+        }
+        /*
         ledcWrite(0, LEDC_BASE_DUTY);
         for(t=0;t<8;t++) delay(LEDC_BASE_LEN);
     //  noTone(output);
-        ledcWrite(0, 0);				// uint8_t chan, uint32_t duty 0%
+        ledcWrite(0, 0);                // uint8_t chan, uint32_t duty 0%
         for(t=0;t<2;t++) delay(LEDC_BASE_LEN);
+        */
     }else{
     //  tone(output,NOTE_A5,800);
-        ledcWriteNote(0,NOTE_A,6);		// uint8_t chan, note_t note, uint8_t octave
+        ledcWriteNote(0,NOTE_A,6);      // uint8_t chan, note_t note, uint8_t octave
         ledcWrite(0, LEDC_BASE_DUTY);
+        for(t=10;t>=0;t--){
+            ledcWrite(0, LEDC_BASE_DUTY * t / 10);
+            delay(LEDC_BASE_LEN);
+        }
+        
+        /*
         for(t=0;t<8;t++) delay(LEDC_BASE_LEN);
     //  noTone(output);
-        ledcWrite(0, 0);				// uint8_t chan, uint32_t duty 0%
+        ledcWrite(0, 0);                // uint8_t chan, uint32_t duty 0%
         for(t=0;t<2;t++) delay(LEDC_BASE_LEN);
+        */
     }
     count--;
     if(count<0) count=0;

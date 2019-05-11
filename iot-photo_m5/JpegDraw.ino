@@ -61,7 +61,7 @@ void _jpeg_avrage(uint8 *color, uint8 *newdata, int n){
     }
 }
 
-void jpegDraw(File file){
+void jpegDraw(File file,uint8_t *camera_buf,int camera_buf_len){
     uint8 *pImg;
     unsigned int index;
     unsigned int pImg_len;
@@ -73,7 +73,15 @@ void jpegDraw(File file){
     int color_x,color_y;
     uint16_t color_out;
     
+    Serial.print("Loading image '");
+    Serial.print(file.name());
+    Serial.println('\'');
+    Serial.print("File size: ");
+    if(camera_buf_len ==0) Serial.println(file.size());
+    else Serial.println(camera_buf_len);
+    
     JpegDec.begin();
+    JpegDec.setModeBuf(camera_buf,camera_buf_len);
     JpegDec.decode(file,0);
     
     if(JpegDec.width >= JpegDec.height){
@@ -121,6 +129,17 @@ void jpegDraw(File file){
             }
         }
     }
+}
+
+void jpegDraw(File file){
+	uint8_t *camera_buf;
+	int camera_buf_len=0;
+	jpegDraw(file,camera_buf,camera_buf_len);
+}
+
+void jpegDrawBuf(uint8_t *camera_buf,int camera_buf_len){
+	File dummy;
+	jpegDraw(dummy,camera_buf,camera_buf_len);
 }
 
 #define BUFFPIXEL 20
@@ -253,6 +272,21 @@ uint32_t read32(File f) {
     return result;
 }
 
+void jpegDrawShowTitle(String S){
+	int x[4]={-1,-1,+1,+1};
+	int y[4]={-1,+1,+1,-1};
+	
+	oled.setTextSize(0);
+	oled.setTextColor(BLACK);
+	for( int i=0;i<4;i++){
+		oled.setCursor(1+x[i], 1+y[i]);
+		oled.print(S);
+	}
+    oled.setTextColor(WHITE);
+    oled.setCursor(1, 1);
+	oled.println(S);
+}
+
 int jpegDrawSlide(File file){
     if(!file.isDirectory()){
         String filename = file.name();
@@ -261,12 +295,7 @@ int jpegDrawSlide(File file){
             Serial.print("found jpeg file : ");
             Serial.println(filename);
             jpegDraw(file);
-            oled.setTextColor(BLACK);
-            oled.setTextSize(0);
-            oled.setCursor(1, 1);
-            oled.println(filename.substring(1));
-            oled.setCursor(96-6*4, 1);
-            oled.println("JPEG");
+            jpegDrawShowTitle(filename.substring(1) + " JPEG");
         //  Serial.println("Done JPEG Draw");
             return 1;
         }
@@ -274,12 +303,7 @@ int jpegDrawSlide(File file){
             Serial.print("found bmp file  : ");
             Serial.println(filename);
             bmpDraw(file);
-            oled.setTextColor(BLACK);
-            oled.setTextSize(0);
-            oled.setCursor(1, 1);
-            oled.println(filename.substring(1));
-            oled.setCursor(96-6*3, 1);
-            oled.println("BMP");
+            jpegDrawShowTitle(filename.substring(1) + " BMP");
         //  Serial.println("Done BMP Draw");
             return 1;
         }
