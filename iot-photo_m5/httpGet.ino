@@ -3,7 +3,6 @@ HTMLコンテンツ取得
                                           Copyright (c) 2016-2019 Wataru KUNINO
 *******************************************************************************/
 
-// #define TIMEOUT 3000                     // タイムアウト 3秒
 // extern boolean SD_CARD_EN
 
 #include <WiFi.h>                           // ESP32用WiFiライブラリ
@@ -23,6 +22,8 @@ int httpGet(char *url,int max_size){
     int headF=0;                            // ヘッダフラグ(0:HEAD 1:EOL 2:DATA)
     unsigned long time;                     // 時間測定用
 
+    memset(to,0,33);
+    memset(s,0,257);
     if(!isgraph(url[0])) return 0;          // URLが無い時は処理を行わない
     cp=strchr(url,'/');                     // URL内の区切りを検索
     if(!cp){                                // 区切りが無かった場合は
@@ -41,8 +42,9 @@ int httpGet(char *url,int max_size){
     Serial.println("Recieving... ");
     i=0;
     while( !client.connect(to,80) ){        // 外部サイトへ接続を実行する
-        i++; if( i >= TIMEOUT / 1000){      // 失敗時のリトライ処理 1/10
+        i++; if( i >= 30){                  // 失敗時のリトライ処理 30
             Serial.println("ERROR: Failed to connect");
+            Serial.println("HTTP URL : " + String(url));
             Serial.println("HTTP Host: " + String(to));
             Serial.println("HTTP file: " + String(s));
             
@@ -76,7 +78,7 @@ int httpGet(char *url,int max_size){
     time=millis();
     i=0;j=0;
     t=0;
-    while(t<TIMEOUT){
+    while(t<3000){
         if(client.available()){             // クライアントからのデータを確認
             t = 1000;                       // 一度、接続したときのタイムアウトは1秒
             c=client.read();                // TCPデータの読み取り
