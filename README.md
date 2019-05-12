@@ -8,7 +8,7 @@ Wi-Fiカメラからの画像を表示することが出来るフォトフレー
 有機ELディスプレイSSD1331用と、液晶ディスプレイILI9341の2種類を用意しました。  
 M5 Stackには、iot-photo_m5を使用ください。
 
-* 有機EL用(SSD1331)：[iot-photo_esp32](https://github.com/bokunimowakaru/iot-photo/tree/master/iot-photo_esp32)
+* 有機EL用(SSD1331)：[iot-photo_oled](https://github.com/bokunimowakaru/iot-photo/tree/master/iot-photo_oled)
 * M5Stack用(ILI9341)：[iot-photo_m5](https://github.com/bokunimowakaru/iot-photo/tree/master/iot-photo_m5)
 
 ## 対応カメラ
