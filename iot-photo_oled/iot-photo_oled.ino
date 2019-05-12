@@ -1,9 +1,12 @@
 /*******************************************************************************
-Example 64: ESP32 Wi-Fi コンシェルジェ フォトフレーム＆カメラ画像表示端末
-有機ELディスプレイ フォトフレーム SSD1331ドライバ用
+ESP32 Wi-Fi コンシェルジェ フォトフレーム＆カメラ画像表示端末
+for 有機ELディスプレイ フォトフレーム SSD1331ドライバ用
 
-・ワイヤレスカメラ（example15またはexample47）が撮影した画像を表示します
+・カメラ TTGO T-Camera が撮影した画像を表示します
 ・SDカード内の画像ファイル(JPEGとBMP)を表示するフォトフレーム機能も搭載
+
+詳細情報：
+https://github.com/bokunimowakaru/iot-photo
 
 									  Copyright (c) 2016-2019 Wataru KUNINO
 *******************************************************************************/
@@ -19,8 +22,11 @@ Example 64: ESP32 Wi-Fi コンシェルジェ フォトフレーム＆カメラ�
 #define PIN_OLED_RST	25
 #define PIN_OLED_MOSI	23
 #define PIN_OLED_SCLK	18
-/*
+#define PIN_BUZZER		12					// GPIO 12:スピーカ
+RTC_DATA_ATTR uint8_t BUZZER_VOL=127; 		// スピーカの音量(0～127)
+
 #define PIN_SD_CS		5					// GPIO 5にSDのCSを接続
+/*
 #define PIN_SPI_MOSI	23
 #define PIN_SPI_MISO	19
 #define PIN_SPI_SCLK	18
@@ -32,7 +38,18 @@ Example 64: ESP32 Wi-Fi コンシェルジェ フォトフレーム＆カメラ�
 #define SSID_AP "1234ABCD"					// 本機の無線アクセスポイントのSSID
 #define PASS_AP "password"					// パスワード
 #define PORT 1024							// センサ機器 UDP受信ポート番号
-#define DEVICE_CAM "cam_a"					// カメラ(実習4/example15)名前5文字
+RTC_DATA_ATTR char	DEVICE_CAM[9]="cam_a_5,";	// カメラ(実習4/example15)名前5文字
+RTC_DATA_ATTR char	DEVICE_PIR[9]="pir_s_5,";	// カメラを起動する人感センサ名
+RTC_DATA_ATTR char	DEVICE_URL[33]="192.168.0.2/cam.jpg";	// カメラのアクセス先
+
+#define CAMERA_BUF_EN							// カメラ用バッファを使用する
+#ifdef CAMERA_BUF_EN
+	#define CAMERA_BUF_SIZE 32767				// カメラ用バッファ・サイズ
+#else
+	#define CAMERA_BUF_SIZE 2
+#endif
+static uint8_t camera_buf[CAMERA_BUF_SIZE];
+static int camera_buf_len=0;
 
 #include "Adafruit_GFX.h"
 #include "Adafruit_SSD1331.h"
@@ -49,13 +66,15 @@ boolean SD_CARD_EN = false; 				// SDカードを使用可否
 unsigned long TIME; 						// タイマー用変数
 
 void setup(void){
+	pinMode(PIN_BUZZER,OUTPUT); 			// ブザーを接続したポートを出力に
+	chimeBellsSetup(PIN_BUZZER,BUZZER_VOL); // ブザー/LED用するPWM制御部の初期化
 	Serial.begin(115200);
 	Serial.println("init");
 	oled.begin();
 	oled.fillScreen(0x0000);
 	oled.println("eg.64 PhotoFrame");		// 「ｻﾝﾌﾟﾙ 28」をLCDに表示する
 	delay(500);
-	if(SD.begin()){ 						// SDカードの使用開始
+	if(SD.begin(PIN_SD_CS)){ 				// SDカードの使用開始
 		SD_CARD_EN = true;
 		oled.println("SD Ready");
 	}else if(!SPIFFS.begin()){				// SDカード失敗時に SPIFFS開始
@@ -65,15 +84,25 @@ void setup(void){
 	WiFi.begin(SSID,PASS);					// 無線LANアクセスポイントへ接続
 	TIME=millis();
 	while(WiFi.status() != WL_CONNECTED){	// 接続に成功するまで待つ
-		oled.print("."); delay(500);		// 接続進捗を表示
+		oled.print(".");					// 接続進捗を表示
+		ledcWriteNote(0,NOTE_B,7);
+		ledcWrite(0, BUZZER_VOL);
+		delay(50);
+		ledcWrite(0, 0);
+		delay(450); 						// 待ち時間処理
 		if(millis()-TIME > TIMEOUT){		// 待ち時間後の処理
+			ledcWriteNote(0,NOTE_G,7);
+			ledcWrite(0, BUZZER_VOL);
 			WiFi.disconnect();				// WiFiアクセスポイントを切断する
 			oled.println("\nWi-Fi AP Mode");// 接続が出来なかったときの表示
-			WiFi.mode(WIFI_AP); delay(100); // 無線LANを【AP】モードに設定
+			WiFi.mode(WIFI_AP); 			// 無線LANを【AP】モードに設定
+			delay(100); 					// 設定時間
+			delay(200); 					// 鳴音時間
+			ledcWrite(0, 0);
 			WiFi.softAP(SSID_AP,PASS_AP);	// ソフトウェアAPの起動
 			WiFi.softAPConfig(
 				IPAddress(192,168,0,1), 	// AP側の固定IPアドレスの設定
-				IPAddress(0,0,0,0), 		// 本機のゲートウェイアドレスの設定
+				IPAddress(192,168,0,1), 	// 本機のゲートウェイアドレスの設定
 				IPAddress(255,255,255,0)	// ネットマスクの設定
 			); oled.println(WiFi.softAPIP()); break;
 		}
@@ -88,6 +117,9 @@ void setup(void){
 	TIME=millis();
 }
 
+boolean get_photo_continuously = false;
+int chime=0;								// チャイムOFF
+
 void loop(){								// 繰り返し実行する関数
 	File file;
 	WiFiClient client;						// Wi-Fiクライアントの定義
@@ -98,9 +130,42 @@ void loop(){								// 繰り返し実行する関数
 	int len=0;								// 文字列長を示す整数型変数を定義
 	int headF=0;							// ヘッダフラグ(0:ヘッダ 1:BODY)
 
+	if(chime){								// チャイムの有無
+		chime=chimeBells(PIN_BUZZER,chime); // チャイム音を鳴らす
+		return;
+	}
 	client = server.available();			// 接続されたTCPクライアントを生成
 	if(!client){							// TCPクライアントが無かった場合
-		if(millis()-TIME > TIMEOUT){
+		if(get_photo_continuously){
+			unsigned long CAM_TIME = millis();
+			#ifdef CAMERA_BUF_EN
+				len = httpGetBuf(DEVICE_URL,0); // 0=サイズ不明
+			#else
+				len = httpGet(DEVICE_URL,0);
+			#endif
+			unsigned long CAM_TIME_HTTP = millis() - CAM_TIME;
+			if(len>0) {
+				if(SD_CARD_EN) file = SD.open("/cam.jpg","r");	
+				else file = SPIFFS.open("/cam.jpg","r");
+				#ifdef CAMERA_BUF_EN
+					jpegDrawBuf(camera_buf,camera_buf_len);
+				#else
+					jpegDraw(file);
+				#endif
+			//	jpegDrawShowTitle(DEVICE_URL);	// 背景描画つき
+				oled.setCursor(1, 1);
+				oled.println(DEVICE_URL);
+				#ifdef CAMERA_BUF_EN
+					file.close();
+				#endif
+				unsigned long CAM_TIME_JPEG = millis() - CAM_TIME - CAM_TIME_HTTP;
+				int ms = (int)(millis() - CAM_TIME);
+				float fps = 1000. / ( (float)CAM_TIME_HTTP + (float)CAM_TIME_JPEG );
+				Serial.println("\nHTTP time :" + String(CAM_TIME_HTTP) + " ms");
+				Serial.println("JPEG time :" + String(CAM_TIME_JPEG) + " ms");
+				Serial.println("Total time:" + String(CAM_TIME_HTTP+CAM_TIME_JPEG) + " ms (" + String(fps,3) + " f/s)\n");
+			}
+		}else if(millis()-TIME > TIMEOUT){
 			if(SD_CARD_EN) jpegDrawSlideShowNext(SD);
 			else jpegDrawSlideShowNext(SPIFFS);
 			TIME=millis();
@@ -112,14 +177,40 @@ void loop(){								// 繰り返し実行する関数
 		for(i=0;i<len;i++) if( !isgraph(s[i]) ) s[i]=' ';	// 特殊文字除去
 		if(len <= 8)return; 				// 8文字以下の場合はデータなし
 		if(s[5]!='_' || s[7]!=',')return;	// 6文字目「_」8文字目「,」を確認
+		oled.println(s); Serial.println(); Serial.println(s);
 		if(strncmp(s,DEVICE_CAM,5)==0){ 	// カメラからの取得指示のとき
 			char *cp=strchr(&s[8],','); 	// cam_a_1,size, http://192.168...
-			if(cp && strncmp(cp+2,"http://",7)==0) httpGet(cp+9,atoi(&s[8]));
-			if(SD_CARD_EN) file = SD.open("/cam.jpg","r");	
-			else file = SPIFFS.open("/cam.jpg","r"); 
-			jpegDrawSlide(file);
-			file.close();
+			int size = atoi(&s[8]);
+			if(cp && strncmp(cp+2,"http://",7)==0){
+				if(size > 0){
+					httpGet(cp+9,atoi(&s[8]));
+					if(SD_CARD_EN) file = SD.open("/cam.jpg","r");	
+					else file = SPIFFS.open("/cam.jpg","r"); 
+					jpegDrawSlide(file);
+					file.close();
+				}else if(strncmp(s,DEVICE_CAM,8)==0){	// デバイス名の一致で登録
+					ledcWriteNote(0,NOTE_B,7);
+					ledcWrite(0, BUZZER_VOL);
+					delay(50);
+					ledcWrite(0, 0);
+					strncpy(DEVICE_URL,cp+9,32);
+					DEVICE_URL[32]='\0';
+					String Str = "Wi-Fi Camera Registered";
+					oled.println(Str); Serial.println(Str);
+					Str = "http://" + String(DEVICE_URL);
+					oled.println(Str); Serial.println(Str);
+				}
+			}
 			TIME=millis();
+		}else if(strncmp(s,DEVICE_PIR,5)==0 && DEVICE_URL[0] ){ // PIR受信かつURL登録あり
+			int pir = atoi(&s[8]);			// PIRの値を取得
+			if(pir){
+				get_photo_continuously = true;
+				chime = 2;
+			}else{
+				get_photo_continuously = false;
+				TIME=millis();
+			}
 		}
 		return; 							// loop()の先頭に戻る
 	}
@@ -139,6 +230,9 @@ void loop(){								// 繰り返し実行する関数
 					strcpy(ret,"FORMAT SPIFFS"); oled.println(ret);
 					SPIFFS.format();		// ファイル全消去
 					break;
+				}else if(len>8 && strncmp(s,"GET /?B=",8)==0){
+					chime=atoi(&s[8]);		// 変数chimeにデータ値を代入
+					break;					// 解析処理の終了
 				}else if (len>6 && strncmp(s,"GET / ",6)==0){
 					len=0;
 					break;					   // 解析処理の終了

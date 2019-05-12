@@ -61,7 +61,7 @@ void _jpeg_avrage(uint8 *color, uint8 *newdata, int n){
     }
 }
 
-void jpegDraw(File file){
+void jpegDraw(File file,uint8_t *camera_buf,int camera_buf_len){
     uint8 *pImg;
     unsigned int index;
     unsigned int pImg_len;
@@ -73,7 +73,15 @@ void jpegDraw(File file){
     int color_x,color_y;
     uint16_t color_out;
     
+    Serial.print("Loading image '");
+    Serial.print(file.name());
+    Serial.print("\', ");
+    if(camera_buf_len ==0) Serial.print(file.size());
+    else Serial.print(camera_buf_len);
+    Serial.println(" bytes");
+    
     JpegDec.begin();
+    JpegDec.setModeBuf(camera_buf,camera_buf_len);
     JpegDec.decode(file,0);
     
     if(JpegDec.width >= JpegDec.height){
@@ -83,6 +91,7 @@ void jpegDraw(File file){
         div_x = _jpeg_div(JpegDec.height / oled.width(), JpegDec.MCUHeight);
     }
     div_y=div_x;
+    
     while(JpegDec.read()){
         index=0;
         for(by=0;by<16;by++)for(bx=0;bx<16;bx++)for(int i=0;i<3;i++){
@@ -116,6 +125,17 @@ void jpegDraw(File file){
             }
         }
     }
+}
+
+void jpegDraw(File file){
+	uint8_t *camera_buf;
+	int camera_buf_len=0;
+	jpegDraw(file,camera_buf,camera_buf_len);
+}
+
+void jpegDrawBuf(uint8_t *camera_buf,int camera_buf_len){
+	File dummy;
+	jpegDraw(dummy,camera_buf,camera_buf_len);
 }
 
 #define BUFFPIXEL 20
@@ -248,6 +268,30 @@ uint32_t read32(File f) {
     return result;
 }
 
+void jpegDrawShowTitle(String S,String S2){
+	int x[4]={-1,-1,+1,+1};
+	int y[4]={-1,+1,+1,-1};
+	
+	oled.setTextSize(0);
+	oled.setTextColor(BLACK);
+	for( int i=0;i<4;i++){
+		oled.setCursor(1+x[i], 1+y[i]);
+		oled.print(S);
+		oled.setCursor(95 - 6 * S2.length()+x[i], 1+y[i]);
+		oled.print(S2);
+	}
+    oled.setTextColor(WHITE);
+    oled.setCursor(1, 1);
+	oled.print(S);
+	oled.setCursor(95 - 6 * S2.length(), 1);
+	oled.print(S2);
+}
+
+void jpegDrawShowTitle(String S){
+	jpegDrawShowTitle(S,"");
+}
+
+
 int jpegDrawSlide(File file){
     if(!file.isDirectory()){
         String filename = file.name();
@@ -256,24 +300,16 @@ int jpegDrawSlide(File file){
             Serial.print("found jpeg file : ");
             Serial.println(filename);
             jpegDraw(file);
-            oled.setTextColor(BLACK);
-            oled.setTextSize(0);
-            oled.setCursor(1, 1);
-            oled.println(filename.substring(1));
-            oled.setCursor(96-6*4, 1);
-            oled.println("JPEG");
+            jpegDrawShowTitle(filename.substring(1),"JPEG");
+        //  Serial.println("Done JPEG Draw");
             return 1;
         }
         if( filename.endsWith(".bmp") || filename.endsWith(".BMP") ){
             Serial.print("found bmp file  : ");
             Serial.println(filename);
             bmpDraw(file);
-            oled.setTextColor(BLACK);
-            oled.setTextSize(0);
-            oled.setCursor(1, 1);
-            oled.println(filename.substring(1));
-            oled.setCursor(96-6*3, 1);
-            oled.println("BMP");
+            jpegDrawShowTitle(filename.substring(1),"BMP");
+        //  Serial.println("Done BMP Draw");
             return 1;
         }
     }
@@ -281,6 +317,7 @@ int jpegDrawSlide(File file){
 }
 
 File _SlideShowRoot;
+int _SlideShowCounter;
 
 void jpegDrawSlideShowNext(fs::FS &fs){
     File file = _SlideShowRoot.openNextFile();
@@ -288,12 +325,36 @@ void jpegDrawSlideShowNext(fs::FS &fs){
 		_SlideShowRoot.close();
 		_SlideShowRoot = fs.open("/");
 		file = _SlideShowRoot.openNextFile();
+        _SlideShowCounter=0;
 	}
     while(file){
-        Serial.println(file.name());
+        _SlideShowCounter++;
+    //  Serial.println(file.name());
         if( jpegDrawSlide(file) ) break;
         file = _SlideShowRoot.openNextFile();
     }
+    Serial.print("SlideShowCounter=");
+    Serial.println(_SlideShowCounter);
+}
+
+int jpegDrawSlideShowPrev(fs::FS &fs){
+    if(_SlideShowCounter < 3) return -1;
+    _SlideShowCounter--;
+    Serial.print("SlideShowCounter=");
+    Serial.println(_SlideShowCounter);
+    if(_SlideShowCounter==0) _SlideShowCounter=1;
+    
+    if(_SlideShowRoot) _SlideShowRoot.close();
+    _SlideShowRoot = fs.open("/");
+    if(!_SlideShowRoot){
+        Serial.println("Failed to open directory");
+        return -1;
+    }
+    File file;
+    for(int i=0;i<_SlideShowCounter;i++) file = _SlideShowRoot.openNextFile();
+    if(!file) return jpegDrawSlideShowPrev(fs);
+    if( jpegDrawSlide(file) ) return 0;
+    return jpegDrawSlideShowPrev(fs);
 }
 
 int jpegDrawSlideShowBegin(fs::FS &fs){
@@ -308,6 +369,7 @@ int jpegDrawSlideShowBegin(fs::FS &fs){
 
 int jpegDrawSlideShowMain(fs::FS &fs,int wait_s){
     int count=0;
+    _SlideShowCounter=0;
     File root = fs.open("/");
     if (!root) {
         Serial.println("Failed to open directory");
@@ -321,6 +383,7 @@ int jpegDrawSlideShowMain(fs::FS &fs,int wait_s){
             delay(wait_s * 1000);
         }
         file = root.openNextFile();
+        _SlideShowCounter++;
     }
     root.close();
     return count;
