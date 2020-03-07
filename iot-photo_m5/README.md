@@ -40,7 +40,7 @@ SPIFFSを使用しているので、Flash Sizeを 4MB に、Partition Schemeを�
 	https://github.com/espressif/arduino-esp32
 	espressif/arduino-esp32 is licensed under the GNU Lesser General Public License v2.1
 
-## Adafruit ILI9341 Library.
+## Adafruit ILI9341 Library FORKED by bokunimo.net
 
 M5 Stack上で動作するArduino用ライブラリを利用しています。
 Adafruit GFX API を使って液晶を制御することが出来ます。
@@ -61,3 +61,7 @@ Adafruit GFX API を使って液晶を制御することが出来ます。
 - picojpeg
 	https://code.google.com/p/picojpeg/
 	Rich Geldreich
+
+- 上記の統合作業ならびに改変部
+	https://bokunimo.net/
+	Wataru KUNINO
