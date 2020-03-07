@@ -10,6 +10,7 @@ M5 Stackには、iot-photo_m5を使用ください。
 
 * 有機EL用(SSD1331)：[iot-photo_oled](https://github.com/bokunimowakaru/iot-photo/tree/master/iot-photo_oled)
 * M5Stack用(ILI9341)：[iot-photo_m5](https://github.com/bokunimowakaru/iot-photo/tree/master/iot-photo_m5)
+コンパイル済みファームウェアあり
 
 ## 対応カメラ
 
@@ -19,7 +20,8 @@ TTGO T-Camera に対応しています。詳細ならびにソフトウェアに
 
 ## コンパイル方法
 
-Arduino IDEに、[arduino-esp32](https://github.com/espressif/arduino-esp32/releases)を組み込んで、コンパイルを行います。arduino-esp32のバージョンは 1.0.2 を使用しました。  
+Arduino IDEに、 [arduino-esp32](https://github.com/espressif/arduino-esp32/releases) を組み込んで、コンパイルを行います。arduino-esp32のバージョンは 1.0.2 を使用しました。  
+M5Stack用については、コンパイル済みソフトウェア、 [iot-photo_m5/target](https://github.com/bokunimowakaru/iot-photo/tree/master/iot-photo_m5/target) を用意しました。詳細については [iot-photo_m5/target/README.md](https://github.com/bokunimowakaru/iot-photo/blob/master/iot-photo_m5/README.md) をご覧ください。  
 
 コンパイル時に必要なライブラリ：  
 * arduino-esp32：https://github.com/espressif/arduino-esp32/releases
